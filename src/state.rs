@@ -113,11 +113,12 @@ impl CardInfo {
 impl CardInfo {
     pub fn pack(self) -> C {
         C(match self {
-            Card(Magic, rank) => { assert!(/*0 <= rank &&*/ rank <= 21); MAGIC_BASE + rank },
-            Card(Wands, rank) => { assert!(2 <= rank && rank <= 13); WANDS_BASE + (rank - 2) },
-            Card(Stars, rank) => { assert!(2 <= rank && rank <= 13); STARS_BASE + (rank - 2) },
-            Card(Swrds, rank) => { assert!(2 <= rank && rank <= 13); SWRDS_BASE + (rank - 2) },
-            Card(Cuups, rank) => { assert!(2 <= rank && rank <= 13); CUUPS_BASE + (rank - 2) },
+            Card(Magic, rank @ 0..=21) => MAGIC_BASE + rank,
+            Card(Wands, rank @ 2..=13) => WANDS_BASE + (rank - 2),
+            Card(Stars, rank @ 2..=13) => STARS_BASE + (rank - 2),
+            Card(Swrds, rank @ 2..=13) => SWRDS_BASE + (rank - 2),
+            Card(Cuups, rank @ 2..=13) => CUUPS_BASE + (rank - 2),
+            Card(_, _) => panic!("no packed representation for {:?}", self),
             Tableau => TABLE_BYTE,
             Freecell => FREEC_BYTE,
             MajorLo => MAJLO_BYTE,
@@ -141,7 +142,7 @@ impl C {
             MAJHI_BYTE => MajorHi,
             MINOR_BYTE => Minor,
             NOCRD_BYTE => NoCard,
-            _ => panic!("unknown card byte self {}", self.0),
+            _ => panic!("unknown packed value for {:?}", self),
         }
     }
 }
