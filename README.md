@@ -13,35 +13,87 @@ There are 74 cards in a FF deck:
 - Major Arcana with numbers 00 to 21
 - Four minor suits with numbers 1 to 10, plus J, Q, K.
 
-Represent the state of the game with `state: [u8; 74]`?
-Each entry represents the corresponding card's current position in the game.
+Note that the aces are never in play, so they can be excluded from the representation.
 
-If `state[x] == y` in the range 0 thru 73, that means that card X is stacked on top of card Y.
-This makes it easy for the goodness function to evaluate the existence of stacked runs of cards and award goodness for more organized boards.
+Each card can either be on top of one of the 69 other cards, in an empty tableau cell, in the freecell, or in the foundation.
 
-If `state[x] == <freecell>`, as a single sentinel value, that means it's in the freecell.
-If `state[x] == <tableau>`, as a single sentinel value, that means it's positioned on an otherwise-empty tableau seat.
-If `state[x] == <foundation>`, as a single sentinel value, that means it's been scored to a foundation.
+Canonical state consists of a `state: [CardState; 70]` with indices corresponding to the 70 'real' cards in the deck.
 
-This deletes some of the symmetries of the problem from the representation -- equality only needs to test these 74 byte values.
-
-Operations that need to be done on this representation:
-- determine if a card is at the top of a stack -- use the high bit of each card?
-- scan 
-
-`state[<tab i>] == y` means that y is the top card of tableau stack i (11 addl values for the 11 tableau stacks).
-`state[<freecell>] == y` means that y is the card in the freecell -- generate candidate moves from the freecell, rather than to it.
-`state[]
-
-, for  Additional 11 entries in the array for the 11 tableau stacks?
-
- that each card is stacked on top of, or some other values.
-
-Cards can be "in foundation"
-Card can be "in foundation"
+CardState is:
+- a value corresponding to the card this card is on top of
+- a value indicating the freecell
+- a value indicating it's the root card of a tableau stack
+- a value indicating it's been scored to the foundation
+- a null value?
 
 
-Note that the aces are never in play either, so there's technically only 70 cards.
+This abstracts away permutations that are irrelevant to the solver:
+- which stack is in which tableau slot
+- which foundation slot corresponds to which suit
+
+These are also not necessary for giving instructions to the user: instructions that tell a user to drag a named card are easier to follow than instructions that just name the card's slot.
+
+Additionally, there's auxiliary state used to speed up the process of generating valid moves and maintained along with it.
+- tableau top card IDs
+- freecell card ID
+- foundation top card IDs
 
 
-Represent each card as a u8 
+
+To gen forced moves: (12 x 6 = 72)
+- loop on tableau top cards and the freecell card
+- loop on foundation cells
+- generate a move if the card stacks following the foundation cell's rule
+
+To gen player moves: (12 x 12 = 144)
+- loop on tableau top cards and the freecell card
+- loop on tableau and freecell
+- generate a move if card stacks on cell (or cell is empty?)
+
+To score stacking-ness: (70*)
+- precompute `const DOWN: [C;70]` of which card is the down-rank from the next (Q -> K -> Tableau)
+- precompute `const UP: [C;70]` of which card is the up-rank from the next (3 -> 2 -> Foundation?)
+- count matches between state and DOWN (70*)
+- count matches between state and UP (70*)
+
+To score foundation: (6* = 5* + 1)
+- add up foundation cell card ranks, inverting upper major foundation (6)
+- layout consideration: make minor foundation and lower major foundation contiguous
+
+To score empty-ness: (12*)
+- count tab_top and freecell matches to empty value (12*)
+- layout consideration: make tab_top and freecell contiguous
+
+
+Possible move types:
+
+Move from freecell to foundation (forced):
+- set freecell's state to 'empty'
+- set card's state to 'foundation'
+- set foundation's state to card's ID
+
+Move from tableau to foundation (forced):
+- set tab_top's state to card's state
+- set card's state to 'foundation'
+- set foundation's state to card's ID
+
+Move from freecell to tableau (player):
+- set freecell's state to 'empty'
+- set card's state to tab_top's state
+- set tab_top's state to card's ID
+  
+Move from tableau to freecell (player):
+- set tab_top's state to card's state
+- set card's state to 'freecell'
+- set freecell's state to card's ID
+
+Move from tableau to tableau (player):
+- set src tab_top's state to card's state
+- set card's state to dst tab_top's state
+- set dst tab_top's state to card's ID
+
+
+
+Stretch goal concept: Train a machine learning model to rate moves and/or game states?
+How do you score the badness of an A* eval function?
+
