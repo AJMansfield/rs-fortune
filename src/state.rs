@@ -9,10 +9,7 @@ struct C(u8);
 const EVERY_BASE: u8 = 0;
 
     const CARDS_BASE: u8 = EVERY_BASE;
-        const MAGIC_BASE: u8 = CARDS_BASE;
-        const MAGIC_COUNT: u8 = 22;
-        const MAGIC_HIGH: u8 = MAGIC_BASE + MAGIC_COUNT - 1;
-        const WANDS_BASE: u8 = MAGIC_HIGH + 1;
+        const WANDS_BASE: u8 = CARDS_BASE;
         const WANDS_COUNT: u8 = 12;
         const WANDS_HIGH: u8 = WANDS_BASE + WANDS_COUNT - 1;
         const STARS_BASE: u8 = WANDS_HIGH + 1;
@@ -24,16 +21,18 @@ const EVERY_BASE: u8 = 0;
         const CUUPS_BASE: u8 = SWRDS_HIGH + 1;
         const CUUPS_COUNT: u8 = 12;
         const CUUPS_HIGH: u8 = CUUPS_BASE + CUUPS_COUNT - 1;
-    const CARDS_HIGH: u8 = CUUPS_HIGH;
+        const MAGIC_BASE: u8 = CUUPS_HIGH + 1;
+        const MAGIC_COUNT: u8 = 22;
+        const MAGIC_HIGH: u8 = MAGIC_BASE + MAGIC_COUNT - 1;
+    const CARDS_HIGH: u8 = MAGIC_HIGH;
     const CARDS_COUNT: u8 = CARDS_HIGH - CARDS_BASE + 1;
 
     const OTHER_BASE: u8 = CARDS_HIGH + 1;
         const TABLE_BYTE: u8 = OTHER_BASE;
         const FREEC_BYTE: u8 = TABLE_BYTE + 1;
-        const MAJLO_BYTE: u8 = FREEC_BYTE + 1; // TODO condense all foundation values together?
-        const MAJHI_BYTE: u8 = MAJLO_BYTE + 1;
-        const MINOR_BYTE: u8 = MAJHI_BYTE + 1;
-        const NOCRD_BYTE: u8 = MINOR_BYTE + 1;
+        const MAJHI_BYTE: u8 = FREEC_BYTE + 1; // TODO condense all foundation values together?
+        const FOUND_BYTE: u8 = MAJHI_BYTE + 1;
+        const NOCRD_BYTE: u8 = FOUND_BYTE + 1;
     const OTHER_HIGH: u8 = NOCRD_BYTE;
     const OTHER_COUNT: u8 = OTHER_HIGH - OTHER_BASE + 1;
 
@@ -48,30 +47,22 @@ impl Default for C {
 
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[repr(u8)]
 enum Suit {
-    Magic,
-    Wands,
-    Stars,
-    Swrds,
-    Cuups,
+    Wands = 0,
+    Stars = 1,
+    Swrds = 2,
+    Cuups = 3,
+    Magic = 4,
 }
 impl Suit {
     fn is_minor(&self) -> bool {
         match self {
-            Magic => false,
             Wands => true,
             Stars => true,
             Swrds => true,
             Cuups => true,
-        }
-    }
-    fn minor_idx(&self) -> usize {
-        match self {
-            Magic => panic!("not a minor suit"),
-            Wands => 0,
-            Stars => 1,
-            Swrds => 2,
-            Cuups => 3,
+            Magic => false,
         }
     }
 }
@@ -83,9 +74,8 @@ enum CardInfo {
     Card(Suit, u8),
     Tableau,
     Freecell,
-    MajorLo,
-    MajorHi,
-    Minor,
+    Foundation,
+    DownFoundn,
     NoCard,
 }
 use CardInfo::*;
@@ -113,17 +103,16 @@ impl CardInfo {
 impl CardInfo {
     pub fn pack(self) -> C {
         C(match self {
-            Card(Magic, rank @ 0..=21) => MAGIC_BASE + rank,
             Card(Wands, rank @ 2..=13) => WANDS_BASE + (rank - 2),
             Card(Stars, rank @ 2..=13) => STARS_BASE + (rank - 2),
             Card(Swrds, rank @ 2..=13) => SWRDS_BASE + (rank - 2),
             Card(Cuups, rank @ 2..=13) => CUUPS_BASE + (rank - 2),
+            Card(Magic, rank @ 0..=21) => MAGIC_BASE + rank,
             Card(_, _) => panic!("no packed representation for {:?}", self),
             Tableau => TABLE_BYTE,
             Freecell => FREEC_BYTE,
-            MajorLo => MAJLO_BYTE,
-            MajorHi => MAJHI_BYTE,
-            Minor => MINOR_BYTE,
+            DownFoundn => MAJHI_BYTE,
+            Foundation => FOUND_BYTE,
             NoCard => NOCRD_BYTE,
         })
     }
@@ -131,16 +120,15 @@ impl CardInfo {
 impl C {
     pub fn info(self) -> CardInfo {
         match self.0 {
-            MAGIC_BASE..=MAGIC_HIGH => Card(Magic, self.0 - MAGIC_BASE),
             WANDS_BASE..=WANDS_HIGH => Card(Wands, self.0 + 2 - WANDS_BASE),
             STARS_BASE..=STARS_HIGH => Card(Stars, self.0 + 2 - STARS_BASE),
             SWRDS_BASE..=SWRDS_HIGH => Card(Swrds, self.0 + 2 - SWRDS_BASE),
             CUUPS_BASE..=CUUPS_HIGH => Card(Cuups, self.0 + 2 - CUUPS_BASE),
+            MAGIC_BASE..=MAGIC_HIGH => Card(Magic, self.0 - MAGIC_BASE),
             TABLE_BYTE => Tableau,
             FREEC_BYTE => Freecell,
-            MAJLO_BYTE => MajorLo,
-            MAJHI_BYTE => MajorHi,
-            MINOR_BYTE => Minor,
+            MAJHI_BYTE => DownFoundn,
+            FOUND_BYTE => Foundation,
             NOCRD_BYTE => NoCard,
             _ => panic!("unknown packed value for {:?}", self),
         }
@@ -183,7 +171,7 @@ mod tests {
             for suit in [Wands, Stars, Swrds, Cuups] {
                 vec.append(&mut (2..=13).map(|i| Card(suit, i)).collect());
             }
-            vec.append(&mut vec![Tableau, Freecell, MajorLo, MajorHi, Minor, NoCard]);
+            vec.append(&mut vec![Tableau, Freecell, Foundation, DownFoundn, NoCard]);
             vec
         };
 
@@ -243,11 +231,10 @@ struct BoardInfo {
     /// Pointer to the card in the freecell.
     freecell: C,
 
-    /// Pointer to cards at the top of the left and right major foundations.
-    major: (C, C),
-
-    /// Pointer to cards at the top of each minor foundation.
-    minor: [C; 4],
+    /// Pointer to cards at the top of each ascending foundation.
+    foundation: [C; 5],
+    /// Pointer to card at top of descending major arcana foundation.
+    down_foundn: C,
 }
 
 
@@ -275,7 +262,7 @@ impl Ord for Board {
 
 impl Default for BoardInfo {
     fn default() -> Self {
-        Self { tableau: Default::default(), freecell: Default::default(), major: Default::default(), minor: Default::default() }
+        Self { tableau: Default::default(), freecell: Default::default(), foundation: Default::default(), down_foundn: Default::default() }
     }
 }
 
@@ -289,13 +276,13 @@ impl From<BoardState> for BoardInfo {
         for (i, card_state) in value.cards.iter().enumerate() {
             let cp = C(i as u8);
             let cs = cp.info().card_suit();
+            
             match card_state.info() {
                 Card(_,_) => (),
                 Tableau => {new.tableau[tab_count] = cp; tab_count += 1},
                 Freecell => {assert_eq!(new.freecell.info(), NoCard); new.freecell = cp},
-                MajorLo => new.major.0 = max(new.major.0, cp),
-                MajorHi => new.major.1 = min(new.major.1, cp),
-                Minor => new.minor[cs.minor_idx()] = max(new.minor[cs.minor_idx()], cp), 
+                DownFoundn => new.down_foundn = min(new.down_foundn, cp),
+                Foundation => new.foundation[cs as usize] = max(new.foundation[cs as usize], cp), 
                 NoCard => panic!("missing card"),
             };
         }
