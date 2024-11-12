@@ -68,27 +68,27 @@ To score empty-ness: (12*)
 Possible move types:
 
 Move from freecell to foundation (forced):
-- set freecell's state to 'empty'
+- set freecell's state to card's state ('freecell')
 - set card's state to 'foundation'
 - set foundation's state to card's ID
 
 Move from tableau to foundation (forced):
-- set tab_top's state to card's state
+- set tab_top's state to card's state ('tableau' or card)
 - set card's state to 'foundation'
 - set foundation's state to card's ID
 
 Move from freecell to tableau (player):
-- set freecell's state to 'empty'
+- set freecell's state to card's state ('freecell')
 - set card's state to tab_top's state
 - set tab_top's state to card's ID
   
 Move from tableau to freecell (player):
-- set tab_top's state to card's state
+- set tab_top's state to card's state ('tableau' or card)
 - set card's state to 'freecell'
 - set freecell's state to card's ID
 
 Move from tableau to tableau (player):
-- set src tab_top's state to card's state
+- set src tab_top's state to card's state ('tableau' or card)
 - set card's state to dst tab_top's state
 - set dst tab_top's state to card's ID
 

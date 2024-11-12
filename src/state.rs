@@ -1,5 +1,5 @@
 use core::panic;
-use std::{cmp::{max, min}, hash::Hash};
+use std::{cmp::{max, min}, hash::Hash, iter::{empty, once}};
 
 /// Packed single-byte representation of a FF card, or of a few other states needed for the algorithm.
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
@@ -30,24 +30,29 @@ const EVERY_BASE: u8 = 0;
     const OTHER_BASE: u8 = CARDS_HIGH + 1;
         const TABLE_BYTE: u8 = OTHER_BASE;
         const FREEC_BYTE: u8 = TABLE_BYTE + 1;
-        const MAJHI_BYTE: u8 = FREEC_BYTE + 1; // TODO condense all foundation values together?
-        const FOUND_BYTE: u8 = MAJHI_BYTE + 1;
-        const NOCRD_BYTE: u8 = FOUND_BYTE + 1;
+        const FOUND_BYTE: u8 = FREEC_BYTE + 1;
+        const MAJHI_BYTE: u8 = FOUND_BYTE + 1;
+        const NOCRD_BYTE: u8 = MAJHI_BYTE + 1;
     const OTHER_HIGH: u8 = NOCRD_BYTE;
     const OTHER_COUNT: u8 = OTHER_HIGH - OTHER_BASE + 1;
 
 const EVERY_HIGH: u8 = OTHER_HIGH;
 const EVERY_COUNT: u8 = EVERY_HIGH - EVERY_BASE + 1;
 
+impl C {
+    const TABLEAU: Self = Self(TABLE_BYTE);
+    const FREECELL: Self = Self(FREEC_BYTE);
+    const DOWNFOUNDN: Self = Self(MAJHI_BYTE);
+    const FOUNDATION: Self = Self(FOUND_BYTE);
+    const NO_CARD: Self = Self(NOCRD_BYTE);
+}
 impl Default for C {
     fn default() -> Self {
-        Self(NOCRD_BYTE)
+        Self::NO_CARD
     }
 }
 
-
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
-#[repr(u8)]
 enum Suit {
     Wands = 0,
     Stars = 1,
@@ -262,7 +267,7 @@ impl Ord for Board {
 
 impl Default for BoardInfo {
     fn default() -> Self {
-        Self { tableau: Default::default(), freecell: Default::default(), foundation: Default::default(), down_foundn: Default::default() }
+        Self { tableau: [C::TABLEAU; 11], freecell: C::FREECELL, foundation: [C::NO_CARD; 5], down_foundn: C::NO_CARD }
     }
 }
 
@@ -311,4 +316,108 @@ impl From<BoardState> for Board {
         Board { state: value, info: value.into() }
     }
 }
+
+
+
+impl Board {
+
+    pub fn apply_forced(&mut self) {
+        let mut done = false;
+        'doneloop: while ! done {
+            done = true;
+
+            let suits: &[Suit] = if self.info.freecell == C::FREECELL {
+                &[Magic]
+            } else {
+                &[Wands, Stars, Swrds, Cuups, Magic]
+            };
+
+            let srcs: Box<dyn Iterator<Item = &mut C>> = if self.info.freecell == C::FREECELL {
+                Box::new(self.info.tableau.iter_mut().chain(once(&mut self.info.freecell)))
+            } else {
+                Box::new(self.info.tableau.iter_mut())
+            };
+
+            'srcloop: for src in srcs {
+
+                // Up Foundations
+                'dstloop: for suit in suits {
+                    let dst = &mut self.info.foundation[*suit as usize];
+                    'optloop: loop { // optimistically retry the same move until it fails first before rescanning
+
+                        // hopefully these get hoisted 
+                        let srci = (*src).info();
+                        let dsti = (*dst).info();
+                        if ! srci.is_card() { continue 'srcloop };
+
+                        let do_move = srci.card_suit() == *suit && srci.card_rank() == {
+                            if dsti.is_card() {
+                                dsti.card_rank() + 1
+                            } else if *suit == Magic {
+                                0
+                            } else {
+                                2
+                            }
+                        };
+
+                        if do_move {
+                            let card = *src;
+                            *src = self.state.cards[card.0 as usize];
+                            *dst = card;
+                            done = false;
+                            continue 'optloop;
+                        } else {
+                            break 'optloop;
+                        }
+                    }
+                }
+
+                // Down Foundation
+                'dstloop: {
+                    let suit = &Magic;
+                    let dst = &mut self.info.down_foundn;
+                    'optloop: loop { // optimistically retry the same move until it fails first before rescanning
+
+                        // hopefully these get hoisted 
+                        let srci = (*src).info();
+                        let dsti = (*dst).info();
+                        if ! srci.is_card() { continue 'srcloop };
+
+                        let do_move = srci.card_suit() == *suit && srci.card_rank() == {
+                            if dsti.is_card() {
+                                dsti.card_rank() - 1
+                            } else if *suit == Magic {
+                                21
+                            } else {
+                                panic!("how did we get here?"); 13
+                            }
+                        };
+
+                        if do_move {
+                            let card = *src;
+                            *src = self.state.cards[card.0 as usize];
+                            *dst = card;
+                            done = false;
+                            continue 'optloop;
+                        } else {
+                            break 'optloop;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+
+
+
+// enum MoveLoc {
+//     Tableau(u8),
+//     Freecell,
+// }
+// struct Move {
+    
+// }
 
