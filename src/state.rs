@@ -1,9 +1,9 @@
 use core::panic;
-use std::{cmp::{max, min}, hash::Hash, iter::{empty, once}};
+use std::{cmp::{max, min}, hash::Hash, iter::once};
 
 /// Packed single-byte representation of a FF card, or of a few other states needed for the algorithm.
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
-struct C(u8);
+pub struct C(u8);
 
 // Constants defining the numeric ranges allocated to each category of card.
 const EVERY_BASE: u8 = 0;
@@ -39,12 +39,21 @@ const EVERY_BASE: u8 = 0;
 const EVERY_HIGH: u8 = OTHER_HIGH;
 const EVERY_COUNT: u8 = EVERY_HIGH - EVERY_BASE + 1;
 
+
+#[allow(dead_code)]
 impl C {
-    const TABLEAU: Self = Self(TABLE_BYTE);
-    const FREECELL: Self = Self(FREEC_BYTE);
-    const DOWNFOUNDN: Self = Self(MAJHI_BYTE);
-    const FOUNDATION: Self = Self(FOUND_BYTE);
-    const NO_CARD: Self = Self(NOCRD_BYTE);
+    pub const TABLEAU: Self = Self(TABLE_BYTE);
+    pub const FREECELL: Self = Self(FREEC_BYTE);
+    pub const DOWNFOUNDN: Self = Self(MAJHI_BYTE);
+    pub const FOUNDATION: Self = Self(FOUND_BYTE);
+    pub const NO_CARD: Self = Self(NOCRD_BYTE);
+
+    pub const WANDS_KING: Self = Self(WANDS_HIGH);
+    pub const STARS_KING: Self = Self(STARS_HIGH);
+    pub const SWRDS_KING: Self = Self(SWRDS_HIGH);
+    pub const CUUPS_KING: Self = Self(CUUPS_HIGH);
+    pub const MAGIC_FOOL: Self = Self(MAGIC_BASE);
+    pub const MAGIC_WORLD: Self = Self(MAGIC_HIGH);
 }
 impl Default for C {
     fn default() -> Self {
@@ -53,7 +62,7 @@ impl Default for C {
 }
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
-enum Suit {
+pub enum Suit {
     Wands = 0,
     Stars = 1,
     Swrds = 2,
@@ -61,7 +70,7 @@ enum Suit {
     Magic = 4,
 }
 impl Suit {
-    fn is_minor(&self) -> bool {
+    pub fn is_minor(&self) -> bool {
         match self {
             Wands => true,
             Stars => true,
@@ -75,7 +84,7 @@ impl Suit {
 use Suit::*;
 /// Unpacked information for a card value or card state.
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
-enum CardInfo {
+pub enum CardInfo {
     Card(Suit, u8),
     Tableau,
     Freecell,
@@ -153,8 +162,7 @@ impl From<C> for CardInfo {
 
 
 #[cfg(test)]
-mod tests {
-    // Note this useful idiom: importing names from outer (for mod tests) scope.
+mod card_tests {
     use super::*;
 
     #[test]
@@ -215,31 +223,31 @@ mod tests {
 
 
 #[derive(Debug, Clone, Copy)]
-struct Board {
-    state: BoardState,
-    info: BoardInfo,
+pub struct Board {
+    pub state: BoardState,
+    pub info: BoardInfo,
 }
 
 /// Core state representing the game's underlying symmetry and equivalence classes.
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
-struct BoardState {
+pub struct BoardState {
     /// Pointer to where each card is located: atop another card, in the freecell, or in the foundation.
-    cards: [C; CARDS_COUNT as usize],
+    pub cards: [C; CARDS_COUNT as usize],
 }
 
 /// Auxiliary state useful for manipulating a board quickly.
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
-struct BoardInfo {
+pub struct BoardInfo {
     /// Pointer to the card at the top of each tableau stack.
-    tableau: [C; 11],
+    pub tableau: [C; 11],
 
     /// Pointer to the card in the freecell.
-    freecell: C,
+    pub freecell: C,
 
     /// Pointer to cards at the top of each ascending foundation.
-    foundation: [C; 5],
+    pub foundation: [C; 5],
     /// Pointer to card at top of descending major arcana foundation.
-    down_foundn: C,
+    pub down_foundn: C,
 }
 
 
@@ -265,9 +273,24 @@ impl Ord for Board {
     }
 }
 
+impl Default for BoardState {
+    fn default() -> Self {
+        Self { cards: [C::FOUNDATION; CARDS_COUNT as usize] }
+    }
+}
 impl Default for BoardInfo {
     fn default() -> Self {
-        Self { tableau: [C::TABLEAU; 11], freecell: C::FREECELL, foundation: [C::NO_CARD; 5], down_foundn: C::NO_CARD }
+        Self {
+            tableau: [C::TABLEAU; 11],
+            freecell: C::FREECELL,
+            foundation: [C::WANDS_KING, C::STARS_KING, C::SWRDS_KING, C::CUUPS_KING, C::MAGIC_WORLD],
+            down_foundn: C::NO_CARD,
+        }
+    }
+}
+impl Default for Board {
+    fn default() -> Self {
+        Self { state: Default::default(), info: Default::default() }
     }
 }
 
@@ -317,11 +340,27 @@ impl From<BoardState> for Board {
     }
 }
 
+#[cfg(test)]
+mod board_tests {
+    use super::*;
+
+    #[test]
+    fn default_boardinfo_correct() {
+        let board = Board::default();
+        let dbi: BoardInfo = board.info;
+        let dsi: BoardInfo = board.state.into();
+
+        assert_eq!(dbi, dsi);
+    }
+}
+
 
 
 impl Board {
 
     pub fn apply_forced(&mut self) {
+        #![allow(unused_labels)]
+
         let mut done = false;
         'doneloop: while ! done {
             done = true;
@@ -389,7 +428,8 @@ impl Board {
                             } else if *suit == Magic {
                                 21
                             } else {
-                                panic!("how did we get here?"); 13
+                                panic!("no upstacked minor foundation!"); 
+                                // would be 13 tho
                             }
                         };
 
@@ -413,11 +453,15 @@ impl Board {
 
 
 
-// enum MoveLoc {
-//     Tableau(u8),
-//     Freecell,
-// }
-// struct Move {
-    
-// }
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub enum MoveLoc {
+    Tableau(u8),
+    Freecell,
+}
+
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Move {
+    pub src: MoveLoc,
+    pub dst: MoveLoc,
+}
 
