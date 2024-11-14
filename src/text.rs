@@ -270,10 +270,7 @@ fn fmt_shortrank(f: &mut fmt::Formatter<'_>, rank: u8) -> fmt::Result {
         _ => panic!("no shortrank repr for {}", rank)
     }
 }
-fn from_shortrank_special(s: &str) -> Option<u8> {
-    let has_digits = s.contains(|c|"0123456789".contains(c));
-    if has_digits { return None; }
-
+fn from_shortrank_special(s: &str) -> Result<u8,()> {
     let s = s.to_uppercase();
     let is_ace   = s.contains("A");
     let is_ten   = s.contains("T");
@@ -282,14 +279,22 @@ fn from_shortrank_special(s: &str) -> Option<u8> {
     let is_king  = s.contains("K");
 
     let num_matches = is_ace as u32 + is_ten as u32 + is_jack as u32 + is_queen as u32 + is_king as u32;
-    if num_matches != 1 { return None; }
-
-    if is_ace   { Some( 1) } else
-    if is_ten   { Some(10) } else
-    if is_jack  { Some(11) } else
-    if is_queen { Some(12) } else
-    if is_king  { Some(13) } else 
-    { panic!("logically impossible") }
+    match num_matches {
+        1 => {
+            if is_ace   { Ok( 1) } else
+            if is_ten   { Ok(10) } else
+            if is_jack  { Ok(11) } else
+            if is_queen { Ok(12) } else
+            if is_king  { Ok(13) } else 
+            { panic!("should be impossible") }
+        },
+        _ => Err(()),
+    }
+}
+fn from_rank(s: &str) -> Result<u8,()> {
+    let i0 = s.find(|c|"0123456789".contains(c)).ok_or(())?;
+    let i1 = s.rfind(|c|"0123456789".contains(c)).ok_or(())?;
+    s[i0..=i1].parse().or(Err(()))
 }
 fn fmt_noncard(f: &mut fmt::Formatter<'_>, noncard: C) -> fmt::Result {
     match noncard {
@@ -301,7 +306,7 @@ fn fmt_noncard(f: &mut fmt::Formatter<'_>, noncard: C) -> fmt::Result {
         _ => panic!("not a noncard"),
     }
 }
-fn from_noncard(s: &str) -> Option<C> {
+fn from_noncard(s: &str) -> Result<C,()> {
     let s = s.to_uppercase();
     let is_tab   = s.contains("-");
     let is_free  = s.contains("F");
@@ -310,34 +315,27 @@ fn from_noncard(s: &str) -> Option<C> {
     let is_no    = s.contains(".");
 
     let num_matches = is_tab as u32 + is_free as u32 + is_found as u32 + is_down as u32 + is_no as u32;
-    if num_matches != 1 { return None; }
-
-    if is_tab   { Some(C::TABLEAU) } else
-    if is_free  { Some(C::FREECELL) } else
-    if is_found { Some(C::FOUNDATION) } else
-    if is_down  { Some(C::DOWNFOUNDN) } else
-    if is_no    { Some(C::NO_CARD) } else 
-    { panic!("logically impossible") }
+    match num_matches {
+        1 => {
+            if is_tab   { Ok(C::TABLEAU) } else
+            if is_free  { Ok(C::FREECELL) } else
+            if is_found { Ok(C::FOUNDATION) } else
+            if is_down  { Ok(C::DOWNFOUNDN) } else
+            if is_no    { Ok(C::NO_CARD) } else 
+            { panic!("should be impossible") }
+        },
+        _ => Err(()),
+    }
 }
 
 impl FromStr for C {
     type Err = ();
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match from_noncard(s) {
-            Some(noncard) => return Ok(noncard),
-            None => (),
-        };
-
-        let suit: Suit = s.parse()?;
-
-        let get_digits_subsequence = ||{
-            let i0 = s.find(|c|"0123456789".contains(c))?;
-            let i1 = s.rfind(|c|"0123456789".contains(c))?;
-            s[i0..=i1].parse::<u8>().ok()
-        };
-        let rank = from_shortrank_special(s).or_else(get_digits_subsequence).ok_or(())?;
-
-        Ok(CardInfo::Card(suit, rank).pack())
+        from_noncard(s).or_else(|_|{
+            let suit: Suit = s.parse()?;
+            let rank = from_shortrank_special(s).or_else(|_|from_rank(s))?;
+            Ok(CardInfo::Card(suit, rank).pack())
+        })
     }
 }
