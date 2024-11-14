@@ -3,41 +3,41 @@ use std::{cmp::{max, min}, hash::Hash, iter::once};
 
 /// Packed single-byte representation of a FF card, or of a few other states needed for the algorithm.
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
-pub struct C(u8);
+pub struct C(pub u8);
 
 // Constants defining the numeric ranges allocated to each category of card.
-const EVERY_BASE: u8 = 0;
+pub const EVERY_BASE: u8 = 0;
 
-    const CARDS_BASE: u8 = EVERY_BASE;
-        const WANDS_BASE: u8 = CARDS_BASE;
-        const WANDS_COUNT: u8 = 12;
-        const WANDS_HIGH: u8 = WANDS_BASE + WANDS_COUNT - 1;
-        const STARS_BASE: u8 = WANDS_HIGH + 1;
-        const STARS_COUNT: u8 = 12;
-        const STARS_HIGH: u8 = STARS_BASE + STARS_COUNT - 1;
-        const SWRDS_BASE: u8 = STARS_HIGH + 1;
-        const SWRDS_COUNT: u8 = 12;
-        const SWRDS_HIGH: u8 = SWRDS_BASE + SWRDS_COUNT - 1;
-        const CUUPS_BASE: u8 = SWRDS_HIGH + 1;
-        const CUUPS_COUNT: u8 = 12;
-        const CUUPS_HIGH: u8 = CUUPS_BASE + CUUPS_COUNT - 1;
-        const MAGIC_BASE: u8 = CUUPS_HIGH + 1;
-        const MAGIC_COUNT: u8 = 22;
-        const MAGIC_HIGH: u8 = MAGIC_BASE + MAGIC_COUNT - 1;
-    const CARDS_HIGH: u8 = MAGIC_HIGH;
-    const CARDS_COUNT: u8 = CARDS_HIGH - CARDS_BASE + 1;
+    pub const CARDS_BASE: u8 = EVERY_BASE;
+        pub const WANDS_BASE: u8 = CARDS_BASE;
+        pub const WANDS_COUNT: u8 = 12;
+        pub const WANDS_HIGH: u8 = WANDS_BASE + WANDS_COUNT - 1;
+        pub const STARS_BASE: u8 = WANDS_HIGH + 1;
+        pub const STARS_COUNT: u8 = 12;
+        pub const STARS_HIGH: u8 = STARS_BASE + STARS_COUNT - 1;
+        pub const SWRDS_BASE: u8 = STARS_HIGH + 1;
+        pub const SWRDS_COUNT: u8 = 12;
+        pub const SWRDS_HIGH: u8 = SWRDS_BASE + SWRDS_COUNT - 1;
+        pub const CUUPS_BASE: u8 = SWRDS_HIGH + 1;
+        pub const CUUPS_COUNT: u8 = 12;
+        pub const CUUPS_HIGH: u8 = CUUPS_BASE + CUUPS_COUNT - 1;
+        pub const MAGIC_BASE: u8 = CUUPS_HIGH + 1;
+        pub const MAGIC_COUNT: u8 = 22;
+        pub const MAGIC_HIGH: u8 = MAGIC_BASE + MAGIC_COUNT - 1;
+    pub const CARDS_HIGH: u8 = MAGIC_HIGH;
+    pub const CARDS_COUNT: u8 = CARDS_HIGH - CARDS_BASE + 1;
 
-    const OTHER_BASE: u8 = CARDS_HIGH + 1;
-        const TABLE_BYTE: u8 = OTHER_BASE;
-        const FREEC_BYTE: u8 = TABLE_BYTE + 1;
-        const FOUND_BYTE: u8 = FREEC_BYTE + 1;
-        const MAJHI_BYTE: u8 = FOUND_BYTE + 1;
-        const NOCRD_BYTE: u8 = MAJHI_BYTE + 1;
-    const OTHER_HIGH: u8 = NOCRD_BYTE;
-    const OTHER_COUNT: u8 = OTHER_HIGH - OTHER_BASE + 1;
+    pub const OTHER_BASE: u8 = CARDS_HIGH + 1;
+        pub const TABLE_BYTE: u8 = OTHER_BASE;
+        pub const FREEC_BYTE: u8 = TABLE_BYTE + 1;
+        pub const FOUND_BYTE: u8 = FREEC_BYTE + 1;
+        pub const MAJHI_BYTE: u8 = FOUND_BYTE + 1;
+        pub const NOCRD_BYTE: u8 = MAJHI_BYTE + 1;
+    pub const OTHER_HIGH: u8 = NOCRD_BYTE;
+    pub const OTHER_COUNT: u8 = OTHER_HIGH - OTHER_BASE + 1;
 
-const EVERY_HIGH: u8 = OTHER_HIGH;
-const EVERY_COUNT: u8 = EVERY_HIGH - EVERY_BASE + 1;
+pub const EVERY_HIGH: u8 = OTHER_HIGH;
+pub const EVERY_COUNT: u8 = EVERY_HIGH - EVERY_BASE + 1;
 
 
 #[allow(dead_code)]
@@ -274,15 +274,15 @@ impl Ord for Board {
 }
 
 impl Default for BoardState {
+    /// Default state is the lexically smallest win.
     fn default() -> Self {
-        /// Default state is the lexically smallest win.
         Self { cards: [C::FOUNDATION; CARDS_COUNT as usize] }
     }
 }
 impl Default for BoardInfo {
+    /// Default state is the lexically smallest win.
     fn default() -> Self {
         Self {
-            /// Default state is the lexically smallest win.
             tableau: [C::TABLEAU; 11],
             freecell: C::FREECELL,
             foundation: [C::WANDS_KING, C::STARS_KING, C::SWRDS_KING, C::CUUPS_KING, C::MAGIC_WORLD],
@@ -291,8 +291,8 @@ impl Default for BoardInfo {
     }
 }
 impl Default for Board {
+    /// Default state is the lexically smallest win.
     fn default() -> Self {
-        /// Default state is the lexically smallest win.
         Self { state: Default::default(), info: Default::default() }
     }
 }
