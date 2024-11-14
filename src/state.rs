@@ -275,12 +275,14 @@ impl Ord for Board {
 
 impl Default for BoardState {
     fn default() -> Self {
+        /// Default state is the lexically smallest win.
         Self { cards: [C::FOUNDATION; CARDS_COUNT as usize] }
     }
 }
 impl Default for BoardInfo {
     fn default() -> Self {
         Self {
+            /// Default state is the lexically smallest win.
             tableau: [C::TABLEAU; 11],
             freecell: C::FREECELL,
             foundation: [C::WANDS_KING, C::STARS_KING, C::SWRDS_KING, C::CUUPS_KING, C::MAGIC_WORLD],
@@ -290,6 +292,7 @@ impl Default for BoardInfo {
 }
 impl Default for Board {
     fn default() -> Self {
+        /// Default state is the lexically smallest win.
         Self { state: Default::default(), info: Default::default() }
     }
 }
