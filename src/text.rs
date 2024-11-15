@@ -1,7 +1,7 @@
 //! Trait Implementations for Parsing or Outputting State Objects
 //! 
 //! 
-use std::{fmt, str::FromStr};
+use std::{collections::HashSet, fmt, iter::zip, str::FromStr};
 use crate::state::*;
 
 #[cfg(test)]
@@ -338,4 +338,340 @@ impl FromStr for C {
             Ok(CardInfo::Card(suit, rank).pack())
         })
     }
+}
+
+
+#[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
+struct BoardLayout {
+    tableau: [Vec<C>; 11],
+    info: BoardInfo,
+}
+
+impl Default for BoardLayout {
+    fn default() -> Self {
+        Self { tableau: Default::default(), info: Default::default() }
+    }
+}
+
+impl From<BoardState> for BoardLayout {
+    fn from(value: BoardState) -> Self {
+        let mut done = false;
+        let mut result = BoardLayout { tableau: Default::default(), info: value.into() };
+        while !done {
+            done = true;
+
+            for (i, card_state) in value.cards.iter().enumerate() {
+                let card = C(i as u8);
+                for tab in result.tableau.iter_mut() {
+                    let top = *tab.last().unwrap_or(&C::TABLEAU);
+                    if *card_state == top {
+                        tab.push(card);
+                        done = false;
+                    }
+                }
+            }
+        }
+
+        for (tab, tab_top) in zip(result.tableau.iter(), result.info.tableau.iter()) {
+            let tab_end = tab.last().unwrap_or(&C::TABLEAU);
+            assert_eq!(tab_end, tab_top);
+        }
+
+        result
+    }
+}
+
+impl Into<Board> for BoardLayout {
+    fn into(self) -> Board {
+        let mut result = Board { state: Default::default(), info: self.info };
+
+        // mark each card in the tableau with the card below it, or tableau for bottom-cards
+        for tab in self.tableau.iter() {
+            result.state.cards[tab[0].0 as usize] = C::TABLEAU;
+            for w in tab.windows(2) {
+                result.state.cards[w[1].0 as usize] = w[0];
+            }
+        }
+
+        // mark the card in the freecell
+        result.state.cards[self.info.freecell.0 as usize] = C::FREECELL;
+
+        // mark all minor arcana cards from 2 to top
+        for suit in [Suit::Wands, Suit::Stars, Suit::Swrds, Suit::Cuups] {
+            let top = self.info.foundation[suit as usize];
+            let ti = top.info();
+            if ti.is_card() {
+                assert_eq!(ti.card_suit(), suit);
+                for rank in 2..=ti.card_rank() {
+                    let ci = CardInfo::Card(ti.card_suit(), rank);
+                    result.state.cards[ci.pack().0 as usize] = C::FOUNDATION;
+                }
+            }
+        }
+        
+        // mark all major arcana cards from Fool to top
+        {
+            let suit = Suit::Magic;
+            let top = self.info.foundation[suit as usize];
+            let ti = top.info();
+            if ti.is_card() {
+                assert_eq!(ti.card_suit(), suit);
+                for rank in 0..=ti.card_rank() {
+                    let ci = CardInfo::Card(ti.card_suit(), rank);
+                    result.state.cards[ci.pack().0 as usize] = C::FOUNDATION;
+                }
+            }
+        }
+
+        // mark all major arcana cards from top to World
+        {
+            let suit = Suit::Magic;
+            let top: C = self.info.down_foundn;
+            let ti = top.info();
+            if ti.is_card() {
+                assert_eq!(ti.card_suit(), suit);
+                for rank in ti.card_rank()..=21 {
+                    let ci = CardInfo::Card(ti.card_suit(), rank);
+                    result.state.cards[ci.pack().0 as usize] = C::DOWNFOUNDN;
+                }
+            }
+        }
+
+        result
+    }
+}
+
+// theoretically, the ENTIRE board state could be constructed from _just_ the tableau layout
+// any card that's not present in the tableau must be either stacked in the foundation or sitting in the freecell
+// and auto-stack means if a card in the freecell _could_ be stacked it would
+// Minor-foundation locking doesn't preclude this:
+// - a minor arcana card can't become scorable while in the freecell because the next-lower card can't be scored
+// - it can't be scorable when being moved to the freecell because if it's free to move it would be scored immediately instead
+
+impl From<[Vec<C>; 11]> for BoardLayout {
+    fn from(value: [Vec<C>; 11]) -> Self {
+        let all_cards: HashSet<C> = {
+            let mut result: HashSet<C> = Default::default();
+            for i in CARDS_BASE..=CARDS_HIGH {
+                result.insert(C(i));
+            }
+            result 
+        };
+
+        let tab_cards: HashSet<C> = {
+            let mut result: HashSet<C> = Default::default();
+            for tab in &value {
+                for card in tab {
+                    assert!(result.insert(*card));
+                }
+            }
+            result
+        };
+
+        let mut fdn_cards: HashSet<C> = all_cards.difference(&tab_cards).map(|c|*c).collect();
+
+
+        let mut result = BoardLayout {
+            tableau: value,
+            info: BoardInfo { 
+                tableau: [C::TABLEAU; 11],
+                freecell: C::FREECELL,
+                foundation: [C::NO_CARD; 5],
+                down_foundn: C::NO_CARD,
+            }
+        };
+
+        for (tab, tab_top) in zip(result.tableau.iter(), result.info.tableau.iter_mut()) {
+            *tab_top = *tab.last().unwrap_or(&C::TABLEAU);
+        }
+
+        for suit in [Suit::Wands, Suit::Stars, Suit::Swrds, Suit::Cuups] {
+            'rankloop: for rank in 2..=13 {
+                let info = CardInfo::Card(suit, rank);
+                let card = info.pack();
+                if fdn_cards.remove(&card) {
+                    result.info.foundation[suit as usize] = card;
+                } else {
+                    break 'rankloop;
+                }
+            }
+        }
+
+        {
+            let suit = Suit::Magic;
+            'rankloop: for rank in 0..=21 {
+                let info = CardInfo::Card(suit, rank);
+                let card = info.pack();
+                if fdn_cards.remove(&card) {
+                    result.info.foundation[suit as usize] = card;
+                } else {
+                    break 'rankloop;
+                }
+            }
+        }
+
+        {
+            let suit = Suit::Magic;
+            'rankloop: for rank in (0..=21).rev() {
+                let info = CardInfo::Card(suit, rank);
+                let card = info.pack();
+                if fdn_cards.remove(&card) {
+                    result.info.down_foundn = card;
+                } else {
+                    break 'rankloop;
+                }
+            }
+        }
+
+        assert!(fdn_cards.len() <= 1, "{} cards left: {:?}", fdn_cards.len(), fdn_cards);
+
+        result.info.freecell = fdn_cards.drain().next().unwrap_or(C::FREECELL);
+
+        result
+    }
+}
+
+use std::convert::TryInto;
+
+fn vec_to_arr<T, const N: usize>(v: Vec<T>) -> Result<[T; N],()> {
+    v.try_into().or(Err(()))
+}
+
+impl FromStr for BoardLayout {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut is_err = false;
+
+        let tab_vec = s.lines().map(|line|{
+            line.split_whitespace().map(|cardstr|{
+                cardstr.parse().unwrap_or_else(|_| {is_err = true; C::NO_CARD})
+            }).collect::<Vec<C>>()
+        }).collect::<Vec<Vec<C>>>();
+
+        if is_err { return Err(()) }
+
+        let tab: [Vec<C>; 11]  = vec_to_arr::<Vec<C>, 11>(tab_vec)?;
+
+        return Ok(tab.into())
+    }
+}
+
+
+#[cfg(test)]
+mod board_tests {
+
+    use super::*;
+
+    #[test]
+    fn parse_fresh() {
+        let s = "\
+05 07 2$ 8| T! 3* 8$
+18 20 9* 03 K| 2! 01
+16 09 9| 4* 3! 15 11
+K$ 6* 5$ T* 5* 4! 5|
+Q* 6$ J! 14 5! 00 8!
+
+6| Q| 7* 4$ 2| 7! 12
+06 02 K* 3| 04 3$ 7|
+2* 19 13 T| T$ 4| 10
+J| 21 7$ Q$ J* 6! 9!
+9$ 17 K! J$ Q! 8* 08";
+
+        let fdn = [C::NO_CARD; 5];
+        let dfdn =  C::NO_CARD;
+        let frec =  C::FREECELL;
+
+        let bl: BoardLayout = s.parse().expect("parse error");
+        assert_eq!(bl.info.foundation, fdn);
+        assert_eq!(bl.info.down_foundn, dfdn);
+        assert_eq!(bl.info.freecell, frec);
+    }
+
+    #[test]
+    fn parse_handful_scored() {
+        let s = "\
+05 07 8| T! 3* 8$
+18 9* 03 K|
+16 09 9| 4* 3! 15 11
+K$ 6* 5$ T* 5* 4! 5|
+Q* 6$ J! 14 5! 8!
+
+6| Q| 7* 4$ 2| 7! 12
+06 02 K* 3| 04 7|
+13 T| T$ 4| 10
+J| 7$ Q$ J* 6! 9!
+9$ 17 K! J$ Q! 8* 08";
+
+        let fdn = [
+            C::NO_CARD,
+            "2*".parse().unwrap(),
+            "2!".parse().unwrap(),
+            "3$".parse().unwrap(),
+            "01".parse().unwrap(),
+        ];
+        let dfdn =  "19".parse().unwrap();
+        let frec =  C::FREECELL;
+
+        let bl: BoardLayout = s.parse().expect("parse error");
+        assert_eq!(bl.info.foundation, fdn);
+        assert_eq!(bl.info.down_foundn, dfdn);
+        assert_eq!(bl.info.freecell, frec);
+    }
+
+    #[test]
+    fn parse_freecell_filled() {
+        let s = "\
+05 07 2$ 8| T! 3* 8$
+18 20 9* 03 K| 2! 01
+16 09 4* 3! 15 11
+K$ 6* 5$ T* 5* 4! 5|
+Q* 6$ J! 14 5! 00 8!
+
+6| Q| 7* 4$ 2| 7! 12
+06 02 K* 3| 04 3$ 7|
+2* 19 13 T| T$ 4| 10
+J| 21 7$ Q$ J* 6! 9!
+9$ 17 K! J$ Q! 8* 08";
+
+        let fdn = [C::NO_CARD;5];
+        let dfdn =  C::NO_CARD;
+        let frec = "9|".parse().unwrap();
+
+        let bl: BoardLayout = s.parse().expect("parse error");
+        assert_eq!(bl.info.foundation, fdn);
+        assert_eq!(bl.info.down_foundn, dfdn);
+        assert_eq!(bl.info.freecell, frec);
+    }
+    #[test]
+    fn parse_empty() {
+        let s = "\
+
+
+
+
+
+
+
+
+
+
+";
+
+        let fdn = [
+            "K|".parse().unwrap(),
+            "K*".parse().unwrap(),
+            "K!".parse().unwrap(),
+            "K$".parse().unwrap(),
+            "21".parse().unwrap(),
+        ];
+        let dfdn = C::NO_CARD;
+        let frec = C::NO_CARD;
+
+        let bl: BoardLayout = s.parse().expect("parse error");
+        assert_eq!(bl.info.foundation, fdn);
+        assert_eq!(bl.info.down_foundn, dfdn);
+        assert_eq!(bl.info.freecell, frec);
+    }
+
 }
